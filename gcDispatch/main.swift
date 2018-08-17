@@ -8,29 +8,6 @@
 
 import Foundation
 
-//{
-//    "id": 1,
-//    "name": "Leanne Graham",
-//    "username": "Bret",
-//    "email": "Sincere@april.biz",
-//    "address": {
-//        "street": "Kulas Light",
-//        "suite": "Apt. 556",
-//        "city": "Gwenborough",
-//        "zipcode": "92998-3874",
-//        "geo": {
-//            "lat": "-37.3159",
-//            "lng": "81.1496"
-//        }
-//    },
-//    "phone": "1-770-736-8031 x56442",
-//    "website": "hildegard.org",
-//    "company": {
-//        "name": "Romaguera-Crona",
-//        "catchPhrase": "Multi-layered client-server neural-net",
-//        "bs": "harness real-time e-markets"
-//    }
-
 struct Geo: Codable {
     let lat: String
     let lng: String
@@ -50,6 +27,19 @@ struct RawUser: Codable {
     let address: Address
 }
 
+//{
+//    "userId": 1,
+//    "id": 1,
+//    "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+//    "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+//},
+struct RawPost: Codable {
+    let userId: Int
+    let id: Int
+    let title: String
+    let body: String
+}
+
 struct RawTodo: Codable {
     let userId: Int
     let id: Int
@@ -63,6 +53,7 @@ struct User {
     let username: String
     let email: String
     let todos: [RawTodo]
+    let posts: [RawPost]
 }
 
 let handlerBlock: (Data) -> Void = { data in
@@ -70,9 +61,12 @@ let handlerBlock: (Data) -> Void = { data in
 }
 
 var users: [RawUser]?
-var dataUsers: [User]? = []
 var todos: [RawTodo]?
+var posts: [RawPost]?
+
+var dataUsers: [User]? = []
 var userTodos: [RawTodo]? = []
+var userPosts: [RawPost]? = []
 
 let group = DispatchGroup()
 let innerGroup = DispatchGroup()
@@ -107,8 +101,7 @@ func getTodos() {
         
         let decoder = JSONDecoder()
         do {
-            let todo = try decoder.decode([RawTodo].self, from: data)
-            print(todo[0])
+            todos = try decoder.decode([RawTodo].self, from: data)
         } catch {
             print(error)
         }
@@ -128,44 +121,84 @@ func getUserTodo(user: RawUser, index: Int) {
         let decoder = JSONDecoder()
         do {
             let todos = try decoder.decode([RawTodo].self, from: data)
-            let u = User(id: user.id, name: user.name, username: user.username, email: user.email, todos: todos)
-            dataUsers?.append(u)
-            for todo in todos {
-                userTodos!.append(todo)
-            }
+//            let u = User(id: user.id, name: user.name, username: user.username, email: user.email, todos: todos)
+//
+//            dataUsers?.append(u)
+            for todo in todos { userTodos!.append(todo) }
             
         } catch {
             print(error)
         }
         
-        print("COUNT: \(index) ++++++++++")
-        
         innerGroup.leave()
         
         if (index == users!.count - 1) { group.leave() }
         
-        }.resume()
-    
+    }.resume()
 }
 
-group.enter()
-    print("enterusers")
+func getPosts() {
+    let urlString = "https://jsonplaceholder.typicode.com/posts"
+    guard let url = URL(string: urlString) else { return }
+    
+    URLSession.shared.dataTask(with: url) { (data, res, err) in
+        if err != nil { print(err!) }
+        guard let data = data else { return }
+        
+        let decoder = JSONDecoder()
+        do {
+            posts = try decoder.decode([RawPost].self, from: data)
+        } catch {
+            print(err!)
+        }
+        
+        group.leave()
+        
+    }.resume()
+}
+
+func dispatchGetUsers() -> Void {
+    group.enter()
     getUsers()
-group.wait()
-group.enter()
+}
+
+func dispatchGetTodos() -> Void {
+    group.enter()
+    getTodos()
+}
+
+func dispatchGetPosts() -> Void {
+    group.enter()
+    getPosts()
+}
+
+func dispatchGetUserTodos() -> Void {
+    group.enter()
     for (index, user) in users!.enumerated() {
         innerGroup.enter()
         getUserTodo(user: user, index: index + 1)
     }
+}
+
+dispatchGetUsers()
+dispatchGetTodos()
+dispatchGetPosts()
 group.wait()
-group.enter()
-    print("enterusers_______________________")
-    getUsers()
-group.wait()
-print("finished")
+for user in users! {
+    let u = User(
+        id: user.id,
+        name:
+        user.name,
+        username: user.username,
+        email: user.email,
+        todos: todos!.filter { $0.userId == user.id },
+        posts: posts!.filter { $0.userId == user.id }
+    )
+    
+    dataUsers?.append(u)
+}
+
 print(dataUsers![0].id)
-print(dataUsers![0].name)
-print(dataUsers![0].todos[0].userId)
-print(dataUsers![0].todos[0].title)
-print(type(of: users))
-print(type(of: users))
+print(dataUsers![0].posts[0])
+print(dataUsers![0].todos[0])
+//print(users![0], posts![0], todos![0])
