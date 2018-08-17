@@ -109,34 +109,6 @@ func getTodos() {
     }.resume()
 }
 
-func getUserTodo(user: RawUser, index: Int) {
-    let urlString = "https://jsonplaceholder.typicode.com/todos?userId=\(user.id)"
-    guard let url = URL(string: urlString) else { return }
-    
-    //Implementing URLSession
-    URLSession.shared.dataTask(with: url) { (data, res, err) in
-        if err != nil { print(err!) }
-        guard let data = data else { return }
-        
-        let decoder = JSONDecoder()
-        do {
-            let todos = try decoder.decode([RawTodo].self, from: data)
-//            let u = User(id: user.id, name: user.name, username: user.username, email: user.email, todos: todos)
-//
-//            dataUsers?.append(u)
-            for todo in todos { userTodos!.append(todo) }
-            
-        } catch {
-            print(error)
-        }
-        
-        innerGroup.leave()
-        
-        if (index == users!.count - 1) { group.leave() }
-        
-    }.resume()
-}
-
 func getPosts() {
     let urlString = "https://jsonplaceholder.typicode.com/posts"
     guard let url = URL(string: urlString) else { return }
@@ -157,6 +129,26 @@ func getPosts() {
     }.resume()
 }
 
+func normalizeUsers() -> [User] {
+    var nUsers: [User] = []
+    
+    for user in users! {
+        let u = User(
+            id: user.id,
+            name:
+            user.name,
+            username: user.username,
+            email: user.email,
+            todos: todos!.filter { $0.userId == user.id },
+            posts: posts!.filter { $0.userId == user.id }
+        )
+        
+        nUsers.append(u)
+    }
+    
+    return nUsers
+}
+
 func dispatchGetUsers() -> Void {
     group.enter()
     getUsers()
@@ -172,33 +164,10 @@ func dispatchGetPosts() -> Void {
     getPosts()
 }
 
-func dispatchGetUserTodos() -> Void {
-    group.enter()
-    for (index, user) in users!.enumerated() {
-        innerGroup.enter()
-        getUserTodo(user: user, index: index + 1)
-    }
-}
-
 dispatchGetUsers()
 dispatchGetTodos()
 dispatchGetPosts()
-group.wait()
-for user in users! {
-    let u = User(
-        id: user.id,
-        name:
-        user.name,
-        username: user.username,
-        email: user.email,
-        todos: todos!.filter { $0.userId == user.id },
-        posts: posts!.filter { $0.userId == user.id }
-    )
-    
-    dataUsers?.append(u)
-}
 
-print(dataUsers![0].id)
-print(dataUsers![0].posts[0])
-print(dataUsers![0].todos[0])
-//print(users![0], posts![0], todos![0])
+group.wait()
+
+dataUsers = normalizeUsers()
